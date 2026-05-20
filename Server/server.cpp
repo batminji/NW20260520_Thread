@@ -1,11 +1,13 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
+#include "ChatPacket.h"
+
 #include <WinSock2.h>
 #include <iostream>
 #include "json.hpp"
 
-using json = nlohmann::json;
-
 #pragma comment(lib, "ws2_32")
+#pragma comment(lib, "NetCommon")
 
 // Blocking Server
 // Synchrous
@@ -25,7 +27,7 @@ int main()
 	ListenSockAddr.sin_addr.s_addr = INADDR_ANY;
 	ListenSockAddr.sin_port = htons(35000);
 
-	retval = bind(ListenSocket, (SOCKADDR*)&ListenSockAddr, sizeof(ListenSockAddr));
+	retval = ::bind(ListenSocket, (SOCKADDR*)&ListenSockAddr, sizeof(ListenSockAddr));
 
 	listen(ListenSocket, SOMAXCONN);
 
@@ -72,6 +74,7 @@ int main()
 				else
 				{
 					// Recv
+					memset(Buffer, 0, sizeof(Buffer));
 					int RecvBytes = recv(ReadSockets.fd_array[i], Buffer, sizeof(Buffer), 0);
 					if (RecvBytes <= 0)
 					{
@@ -98,7 +101,7 @@ int main()
 						{
 							if (ReadSockets.fd_array[j] != ListenSocket)
 							{
-								int SentBytes = send(ReadSockets.fd_array[j], Buffer, sizeof(Buffer), 0);
+								int SentBytes = send(ReadSockets.fd_array[j], Buffer, (int)strlen(Buffer), 0);
 								if (SentBytes <= 0)
 								{
 									SOCKADDR_IN ClosedSockAddr;

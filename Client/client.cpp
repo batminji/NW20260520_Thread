@@ -1,56 +1,13 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#define RAPIDJSON_HAS_STDSTRING 1
 
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
+#include "ChatPacket.h"
 
 #include <WinSock2.h>
 #include <iostream>
 #include <process.h>
 
 #pragma comment(lib, "ws2_32")
-
-using namespace rapidjson;
-
-int main()
-{
-	// 1. Parse a JSON string into DOM.
-	const char* json = R"(
-{
-	"project": "rapidjson",
-	"stars": 10 ,
-	"name" : "박민지",
-	"result" : true
-}
-	)";
-
-	Document d;
-	d.Parse(json);
-
-	// 2. Modify it by DOM.
-	Value& s = d["stars"];
-	s.SetInt(s.GetInt() + 1);
-
-	std::cout << d["name"].GetString() << std::endl;
-
-	d["name"] = "민지박";
-
-	std::cout << d["result"].GetBool() << std::endl;
-
-	// 3. Stringify the DOM
-	StringBuffer buffer;
-	Writer<StringBuffer> writer(buffer);
-	d.Accept(writer);
-
-	// Output {"project":"rapidjson","stars":11}
-	std::cout << buffer.GetString() << std::endl;
-
-
-
-	return 0;
-
-}
+#pragma comment(lib, "NetCommon")
 
 char RecvBuffer[1024] = { 0, };
 char SendBuffer[1024] = { 0, };
@@ -58,7 +15,7 @@ char SendBuffer[1024] = { 0, };
 unsigned WINAPI RecvThread(void* Socket);
 unsigned WINAPI SendThread(void* Socket);
 
-int main2()
+int main()
 {
 	WSAData wsaData;
 	int retval = 0;
@@ -111,10 +68,11 @@ unsigned __stdcall RecvThread(void* Socket)
 			printf("recv fail!\n");
 			break;
 		}
-		else
-		{
-			printf("server send %s\n", RecvBuffer);
-		}
+		ChatPacket Data;
+
+		Data.Parse(RecvBuffer);
+
+		std::cout << Data.UserID << " : " << Data.Message << " " << Data.Gold << std::endl;
 	}
 
 	return 0;
@@ -127,9 +85,15 @@ unsigned __stdcall SendThread(void* Socket)
 	while (true)
 	{
 		std::cin.getline(SendBuffer, sizeof(SendBuffer));
+		ChatPacket Data;
+		Data.UserID = "junios";
+		Data.Message = SendBuffer;
+		Data.Gold = 1000;
+		std::string JSONString = Data.ToString();
 
-		int SendBytes = send(ServerSocket, SendBuffer, sizeof(SendBuffer), 0);
-		if (SendBytes <= 0)
+		//그냥 1 : 1로 주고 받는다.
+		int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
+		if (SentBytes <= 0)
 		{
 			printf("send fail!\n");
 			break;

@@ -7,8 +7,11 @@ public:
 	std::string Message;
 	int Gold;
 
-	virtual void Parse(std::string InString) override;
-	virtual std::string ToString() override;
-	virtual int Length() override;
-};
+	// Inherited via IPacket
+	void Parse(std::string InString) override;
 
+	std::string ToString() override;
+
+	int Length() override;
+
+};
