@@ -1,6 +1,8 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "ChatPacket.h"
+#include "CS_PlayerDir.h"
+#include "SC_PlayerPos.h"
 
 #include <WinSock2.h>
 #include <iostream>
@@ -42,34 +44,6 @@ int main()
 	// Blocking
 	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
 
-	int PlayerX = 0;
-	int PlayerY = 0;
-
-	while (true)
-	{
-		if (_kbhit())
-		{
-			char Key = _getch();
-			char Dir = ' ';
-
-			if (Key == 'w' || Key == 'W')
-			{
-				Dir = 'W';
-			}
-			else if (Key == 's' || Key == 'S')
-			{
-				Dir = 'S';
-			}
-			else if (Key == 'a' || Key == 'A')
-			{
-				Dir = 'A';
-			}
-			else if (Key == 'd' || Key == 'D')
-			{
-				Dir = 'D';
-			}
-	}
-
 	closesocket(ServerSocket);
 
 	CloseHandle(ThreadHandles[0]);
@@ -92,11 +66,11 @@ unsigned __stdcall RecvThread(void* Socket)
 			printf("recv fail!\n");
 			break;
 		}
-		ChatPacket Data;
+		SC_PlayerPos Data;
 
-		// Data.Parse(RecvBuffer);
+		Data.Parse(RecvBuffer);
 
-		// std::cout << Data.UserID << " : " << Data.UserX << " " << Data.UserY << std::endl;
+		std::cout << Data.UserID << " : " << Data.PlayerX << " " << Data.PlayerY << std::endl;
 	}
 
 	return 0;
@@ -122,6 +96,34 @@ unsigned __stdcall SendThread(void* Socket)
 		// 	printf("send fail!\n");
 		// 	break;
 		// }
+		if (_kbhit())
+		{
+			char Key = _getch();
+			char Dir = ' ';
+
+			if (Key == 'w' || Key == 'W') Dir = 'W';
+			else if (Key == 's' || Key == 'S') Dir = 'S';
+			else if (Key == 'a' || Key == 'A') Dir = 'A';
+			else if (Key == 'd' || Key == 'D') Dir = 'D';
+
+			if (Dir != ' ')
+			{
+				CS_PlayerDir PlayerDirPacket;
+				PlayerDirPacket.UserID = "minji";
+				PlayerDirPacket.Dir = Dir;
+
+				std::string JSONString = PlayerDirPacket.ToString();
+
+				int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
+				if (SentBytes <= 0)
+				{
+					printf("send fail!\n");
+					break;
+				}
+
+				// std::cout << "[SendThread] 키 입력 감지 및 전송 완료 -> 방향: " << Dir << std::endl;
+			}
+		}
 	}
 
 	return 0;

@@ -1,9 +1,13 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "ChatPacket.h"
+#include "CS_PlayerDir.h"
+#include "SC_PlayerPos.h"
 
 #include <WinSock2.h>
 #include <iostream>
+#include <map>
+#include <string>
 #include "json.hpp"
 
 #pragma comment(lib, "ws2_32")
@@ -12,6 +16,15 @@
 // Blocking Server
 // Synchrous
 // Multiplexing (polling)
+
+struct PlayerInfo 
+{
+	std::string UserID = "";
+	int PlayerX = 0;
+	int PlayerY = 0;
+};
+
+std::map<SOCKET, PlayerInfo> ClientPlayers;
 
 int main()
 {
@@ -70,50 +83,105 @@ int main()
 					printf("connect client %s\n", inet_ntoa(ClientSockAddr.sin_addr));
 
 					FD_SET(ClientSocket, &ReadSockets);
+
+					PlayerInfo NewPlayer;
+					NewPlayer.PlayerX = 0;
+					NewPlayer.PlayerY = 0;
+					ClientPlayers[ClientSocket] = NewPlayer;
 				}
 				else
 				{
+					SOCKET CurrentClientSocket = ReadSockets.fd_array[i];
+
 					// Recv
 					memset(Buffer, 0, sizeof(Buffer));
-					int RecvBytes = recv(ReadSockets.fd_array[i], Buffer, sizeof(Buffer), 0);
+					int RecvBytes = recv(CurrentClientSocket, Buffer, sizeof(Buffer), 0);
 					if (RecvBytes <= 0)
 					{
 						SOCKADDR_IN CloseClientSockAddr;
 						memset(&CloseClientSockAddr, 0, sizeof(CloseClientSockAddr));
 						int CloseClientSockLength = sizeof(CloseClientSockAddr);
 
-						getpeername(ReadSockets.fd_array[i], (SOCKADDR*)&CloseClientSockAddr, &CloseClientSockLength);
+						getpeername(CurrentClientSocket, (SOCKADDR*)&CloseClientSockAddr, &CloseClientSockLength);
 						printf("disconnect client %s\n", inet_ntoa(CloseClientSockAddr.sin_addr));
-						closesocket(ReadSockets.fd_array[i]);
-						FD_CLR(ReadSockets.fd_array[i], &ReadSockets);
+						ClientPlayers.erase(CurrentClientSocket); // map에서 제거
+						closesocket(CurrentClientSocket);
+						FD_CLR(CurrentClientSocket, &ReadSockets);
 					}
 					else
 					{
-						SOCKADDR_IN ClientSockAddr;
-						memset(&ClientSockAddr, 0, sizeof(ClientSockAddr));
-						int ClientSockLength = sizeof(ClientSockAddr);
+						// SOCKADDR_IN ClientSockAddr;
+						// memset(&ClientSockAddr, 0, sizeof(ClientSockAddr));
+						// int ClientSockLength = sizeof(ClientSockAddr);
+						// 
+						// getpeername(ReadSockets.fd_array[i], (SOCKADDR*)&ClientSockAddr, &ClientSockLength);
+						// printf("client %s send %s\n", inet_ntoa(ClientSockAddr.sin_addr), Buffer);
+						// 
+						// // 모든 접속한 유저한테 전달
+						// for (int j = 0; j < (int)ReadSockets.fd_count; ++j)
+						// {
+						// 	if (ReadSockets.fd_array[j] != ListenSocket)
+						// 	{
+						// 		int SentBytes = send(ReadSockets.fd_array[j], Buffer, (int)strlen(Buffer), 0);
+						// 		if (SentBytes <= 0)
+						// 		{
+						// 			SOCKADDR_IN ClosedSockAddr;
+						// 			memset(&ClosedSockAddr, 0, sizeof(ClosedSockAddr));
+						// 			int ClosedSockAddrLength = sizeof(ClosedSockAddr);
+						// 
+						// 			SOCKET ClosedSocket = ReadSockets.fd_array[j];
+						// 			getpeername(ClosedSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
+						// 			printf("send fail!\n");
+						// 			printf("disconnect client %s\n", inet_ntoa(ClosedSockAddr.sin_addr));
+						// 			FD_CLR(ReadSockets.fd_array[j], &ReadSockets);
+						// 			closesocket(ClosedSocket);
+						// 		}
+						// 	}
+						// }
+						Buffer[RecvBytes] = '\0';
 
-						getpeername(ReadSockets.fd_array[i], (SOCKADDR*)&ClientSockAddr, &ClientSockLength);
-						printf("client %s send %s\n", inet_ntoa(ClientSockAddr.sin_addr), Buffer);
+						CS_PlayerDir RecvPacket;
+						RecvPacket.Parse(Buffer);
 
-						// 모든 접속한 유저한테 전달
+						ClientPlayers[CurrentClientSocket].UserID = RecvPacket.UserID;
+
+						if (RecvPacket.Dir == 'W' || RecvPacket.Dir == 'w') ClientPlayers[CurrentClientSocket].PlayerY -= 1;
+						else if (RecvPacket.Dir == 'S' || RecvPacket.Dir == 's') ClientPlayers[CurrentClientSocket].PlayerY += 1;
+						else if (RecvPacket.Dir == 'A' || RecvPacket.Dir == 'a') ClientPlayers[CurrentClientSocket].PlayerX -= 1;
+						else if (RecvPacket.Dir == 'D' || RecvPacket.Dir == 'd') ClientPlayers[CurrentClientSocket].PlayerX += 1;
+
+						std::cout << "[Update] " << RecvPacket.UserID
+							<< " -> X: " << ClientPlayers[CurrentClientSocket].PlayerX
+							<< ", Y: " << ClientPlayers[CurrentClientSocket].PlayerY << std::endl;
+
+						SC_PlayerPos SendPacket;
+						SendPacket.UserID = ClientPlayers[CurrentClientSocket].UserID;
+						SendPacket.PlayerX = ClientPlayers[CurrentClientSocket].PlayerX;
+						SendPacket.PlayerY = ClientPlayers[CurrentClientSocket].PlayerY;
+
+						std::string JSONOutput = SendPacket.ToString();
+
 						for (int j = 0; j < (int)ReadSockets.fd_count; ++j)
 						{
-							if (ReadSockets.fd_array[j] != ListenSocket)
+							SOCKET TargetSocket = ReadSockets.fd_array[j];
+
+							if (TargetSocket != ListenSocket)
 							{
-								int SentBytes = send(ReadSockets.fd_array[j], Buffer, (int)strlen(Buffer), 0);
+								int SentBytes = send(TargetSocket, JSONOutput.c_str(), (int)JSONOutput.length(), 0);
+
 								if (SentBytes <= 0)
 								{
 									SOCKADDR_IN ClosedSockAddr;
 									memset(&ClosedSockAddr, 0, sizeof(ClosedSockAddr));
 									int ClosedSockAddrLength = sizeof(ClosedSockAddr);
 
-									SOCKET ClosedSocket = ReadSockets.fd_array[j];
-									getpeername(ClosedSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
+									getpeername(TargetSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
 									printf("send fail!\n");
 									printf("disconnect client %s\n", inet_ntoa(ClosedSockAddr.sin_addr));
-									FD_CLR(ReadSockets.fd_array[j], &ReadSockets);
-									closesocket(ClosedSocket);
+
+									ClientPlayers.erase(TargetSocket);
+									FD_CLR(TargetSocket, &ReadSockets);
+									closesocket(TargetSocket);
 								}
 							}
 						}

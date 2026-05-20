@@ -14,7 +14,12 @@ std::string CS_PlayerDir::ToString()
     //JSONDocument를 문자열 변환 요청
     JSONDocument.SetObject();
     JSONDocument.AddMember("UserID", UserID, JSONDocument.GetAllocator());
-    JSONDocument.AddMember("Dir", Dir, JSONDocument.GetAllocator());
+
+    rapidjson::Value dirValue;
+    char dirStr[2] = { Dir, '\0' };
+    dirValue.SetString(dirStr, 1, JSONDocument.GetAllocator());
+
+    JSONDocument.AddMember("Dir", dirValue, JSONDocument.GetAllocator());
 
     rapidjson::StringBuffer Buffer;
     rapidjson::Writer<rapidjson::StringBuffer> Writer(Buffer);
