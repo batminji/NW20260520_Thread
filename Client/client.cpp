@@ -12,7 +12,7 @@
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "NetCommon")
 
-char RecvBuffer[1024] = { 0, };
+char RecvBuffer[2048] = { 0, };
 char SendBuffer[1024] = { 0, };
 
 unsigned WINAPI RecvThread(void* Socket);
@@ -66,11 +66,16 @@ unsigned __stdcall RecvThread(void* Socket)
 			printf("recv fail!\n");
 			break;
 		}
-		SC_PlayerPos Data;
+		RecvBuffer[RecvBytes] = '\0';
 
+		SC_PlayerPos Data;
 		Data.Parse(RecvBuffer);
 
-		std::cout << Data.UserID << " : " << Data.PlayerX << " " << Data.PlayerY << std::endl;
+		for (const PlayerData& Player : Data.Players)
+		{
+			std::cout << "[" << Player.UserID << "]" << " X: " << Player.PlayerX << " Y : " << Player.PlayerY << std::endl;
+		}
+		std::cout << "--------------------------" << std::endl;
 	}
 
 	return 0;
@@ -101,10 +106,22 @@ unsigned __stdcall SendThread(void* Socket)
 			char Key = _getch();
 			char Dir = ' ';
 
-			if (Key == 'w' || Key == 'W') Dir = 'W';
-			else if (Key == 's' || Key == 'S') Dir = 'S';
-			else if (Key == 'a' || Key == 'A') Dir = 'A';
-			else if (Key == 'd' || Key == 'D') Dir = 'D';
+			if (Key == 'w' || Key == 'W')
+			{
+				Dir = 'W';
+			}
+			else if (Key == 's' || Key == 'S')
+			{
+				Dir = 'S';
+			}
+			else if (Key == 'a' || Key == 'A')
+			{
+				Dir = 'A';
+			}
+			else if (Key == 'd' || Key == 'D')
+			{
+				Dir = 'D';
+			}
 
 			if (Dir != ' ')
 			{
@@ -120,8 +137,6 @@ unsigned __stdcall SendThread(void* Socket)
 					printf("send fail!\n");
 					break;
 				}
-
-				// std::cout << "[SendThread] 키 입력 감지 및 전송 완료 -> 방향: " << Dir << std::endl;
 			}
 		}
 	}

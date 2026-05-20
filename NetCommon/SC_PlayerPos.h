@@ -11,10 +11,6 @@ struct PlayerData {
 class SC_PlayerPos : public Packet
 {
 public:
-	std::string UserID;
-	int PlayerX;
-	int PlayerY;
-
 	std::vector<PlayerData> Players;
 
 	// Inherited via IPacket

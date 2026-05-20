@@ -15,6 +15,9 @@
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
+#include <string>
+#include <vector>
+
 using namespace rapidjson;
 
 #endif //PCH_H
