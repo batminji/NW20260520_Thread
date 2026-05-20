@@ -143,16 +143,14 @@ int main()
 						CS_PlayerDir RecvPacket;
 						RecvPacket.Parse(Buffer);
 
-						ClientPlayers[CurrentClientSocket].UserID = RecvPacket.UserID;
-
 						if (RecvPacket.Dir == 'W' || RecvPacket.Dir == 'w') ClientPlayers[CurrentClientSocket].PlayerY -= 1;
 						else if (RecvPacket.Dir == 'S' || RecvPacket.Dir == 's') ClientPlayers[CurrentClientSocket].PlayerY += 1;
 						else if (RecvPacket.Dir == 'A' || RecvPacket.Dir == 'a') ClientPlayers[CurrentClientSocket].PlayerX -= 1;
 						else if (RecvPacket.Dir == 'D' || RecvPacket.Dir == 'd') ClientPlayers[CurrentClientSocket].PlayerX += 1;
 
-						std::cout << "[Update] " << RecvPacket.UserID
-							<< " -> X: " << ClientPlayers[CurrentClientSocket].PlayerX
-							<< ", Y: " << ClientPlayers[CurrentClientSocket].PlayerY << std::endl;
+						std::cout << RecvPacket.UserID 
+							<< " X: " << ClientPlayers[CurrentClientSocket].PlayerX
+							<< " Y: " << ClientPlayers[CurrentClientSocket].PlayerY << std::endl;
 
 						SC_PlayerPos SendPacket;
 						SendPacket.UserID = ClientPlayers[CurrentClientSocket].UserID;
