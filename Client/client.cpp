@@ -5,6 +5,7 @@
 #include <WinSock2.h>
 #include <iostream>
 #include <process.h>
+#include <conio.h>
 
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "NetCommon")
@@ -41,9 +42,32 @@ int main()
 	// Blocking
 	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
 
+	int PlayerX = 0;
+	int PlayerY = 0;
+
 	while (true)
 	{
-		
+		if (_kbhit())
+		{
+			char Key = _getch();
+			char Dir = ' ';
+
+			if (Key == 'w' || Key == 'W')
+			{
+				Dir = 'W';
+			}
+			else if (Key == 's' || Key == 'S')
+			{
+				Dir = 'S';
+			}
+			else if (Key == 'a' || Key == 'A')
+			{
+				Dir = 'A';
+			}
+			else if (Key == 'd' || Key == 'D')
+			{
+				Dir = 'D';
+			}
 	}
 
 	closesocket(ServerSocket);
@@ -70,9 +94,9 @@ unsigned __stdcall RecvThread(void* Socket)
 		}
 		ChatPacket Data;
 
-		Data.Parse(RecvBuffer);
+		// Data.Parse(RecvBuffer);
 
-		std::cout << Data.UserID << " : " << Data.Message << " " << Data.Gold << std::endl;
+		// std::cout << Data.UserID << " : " << Data.UserX << " " << Data.UserY << std::endl;
 	}
 
 	return 0;
@@ -84,20 +108,20 @@ unsigned __stdcall SendThread(void* Socket)
 
 	while (true)
 	{
-		std::cin.getline(SendBuffer, sizeof(SendBuffer));
-		ChatPacket Data;
-		Data.UserID = "junios";
-		Data.Message = SendBuffer;
-		Data.Gold = 1000;
-		std::string JSONString = Data.ToString();
-
-		//그냥 1 : 1로 주고 받는다.
-		int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
-		if (SentBytes <= 0)
-		{
-			printf("send fail!\n");
-			break;
-		}
+		// std::cin.getline(SendBuffer, sizeof(SendBuffer));
+		// ChatPacket Data;
+		// Data.UserID = "junios";
+		// Data.UserX = 0;
+		// Data.UserY = 0;
+		// std::string JSONString = Data.ToString();
+		// 
+		// //그냥 1 : 1로 주고 받는다.
+		// int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
+		// if (SentBytes <= 0)
+		// {
+		// 	printf("send fail!\n");
+		// 	break;
+		// }
 	}
 
 	return 0;

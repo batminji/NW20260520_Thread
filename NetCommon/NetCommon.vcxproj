@@ -136,12 +136,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ChatPacket.h" />
+    <ClInclude Include="CS_PlayerDir.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Packet.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="SC_PlayerPos.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ChatPacket.cpp" />
+    <ClCompile Include="CS_PlayerDir.cpp" />
     <ClCompile Include="NetCommon.cpp" />
     <ClCompile Include="Packet.cpp" />
     <ClCompile Include="pch.cpp">
@@ -150,6 +153,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="SC_PlayerPos.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

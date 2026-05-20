@@ -27,6 +27,12 @@
     <ClInclude Include="ChatPacket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CS_PlayerDir.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SC_PlayerPos.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetCommon.cpp">
@@ -39,6 +45,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ChatPacket.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CS_PlayerDir.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SC_PlayerPos.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
