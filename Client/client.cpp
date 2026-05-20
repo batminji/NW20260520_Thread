@@ -68,7 +68,9 @@ std::string GenerateRandomID(int Length)
 
 	std::string Result = "user_";
 	for (int i = 0; i < Length; ++i)
+	{
 		Result += Chars[rand() % CharsLen];
+	}
 
 	return Result;
 }
