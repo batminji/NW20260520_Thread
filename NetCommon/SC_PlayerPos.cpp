@@ -8,6 +8,8 @@ void SC_PlayerPos::Parse(std::string InString)
 	UserID = JSONDocument["UserID"].GetString();
 	PlayerX = JSONDocument["PlayerX"].GetInt();
 	PlayerY = JSONDocument["PlayerY"].GetInt();
+
+	Players.clear();
 }
 
 std::string SC_PlayerPos::ToString()
