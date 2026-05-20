@@ -15,11 +15,18 @@
 char RecvBuffer[2048] = { 0, };
 char SendBuffer[1024] = { 0, };
 
+std::string PlayerUserID;
+
+std::string GenerateRandomID(int Length = 6);
+
 unsigned WINAPI RecvThread(void* Socket);
 unsigned WINAPI SendThread(void* Socket);
 
 int main()
 {
+	srand((unsigned int)time(nullptr));
+	PlayerUserID = GenerateRandomID();
+
 	WSAData wsaData;
 	int retval = 0;
 	retval = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -52,6 +59,18 @@ int main()
 	WSACleanup();
 
 	return 0;
+}
+
+std::string GenerateRandomID(int Length)
+{
+	const char Chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+	const int CharsLen = (int)(sizeof(Chars) - 1);
+
+	std::string Result = "user_";
+	for (int i = 0; i < Length; ++i)
+		Result += Chars[rand() % CharsLen];
+
+	return Result;
 }
 
 unsigned __stdcall RecvThread(void* Socket)
@@ -126,7 +145,7 @@ unsigned __stdcall SendThread(void* Socket)
 			if (Dir != ' ')
 			{
 				CS_PlayerDir PlayerDirPacket;
-				PlayerDirPacket.UserID = "minji";
+				PlayerDirPacket.UserID = PlayerUserID;
 				PlayerDirPacket.Dir = Dir;
 
 				std::string JSONString = PlayerDirPacket.ToString();
