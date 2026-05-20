@@ -91,22 +91,23 @@ int main()
 						printf("client %s send %s\n", inet_ntoa(ClientSockAddr.sin_addr), Buffer);
 
 						// 모든 접속한 유저한테 전달
-						for (int j = 0; i < (int)ReadSockets.fd_count; ++j)
+						for (int j = 0; j < (int)ReadSockets.fd_count; ++j)
 						{
-							if (ReadSockets.fd_array[i] != ListenSocket)
+							if (ReadSockets.fd_array[j] != ListenSocket)
 							{
-								int SendBytes = send(ReadSockets.fd_array[i], Buffer, sizeof(Buffer), 0);
-								if (SendBytes <= 0)
+								int SentBytes = send(ReadSockets.fd_array[j], Buffer, sizeof(Buffer), 0);
+								if (SentBytes <= 0)
 								{
-									SOCKADDR_IN CloseClientSockAddr;
-									memset(&CloseClientSockAddr, 0, sizeof(CloseClientSockAddr));
-									int CloseClientSockLength = sizeof(CloseClientSockAddr);
+									SOCKADDR_IN ClosedSockAddr;
+									memset(&ClosedSockAddr, 0, sizeof(ClosedSockAddr));
+									int ClosedSockAddrLength = sizeof(ClosedSockAddr);
 
-									getpeername(ReadSockets.fd_array[i], (SOCKADDR*)&CloseClientSockAddr, &CloseClientSockLength);
+									SOCKET ClosedSocket = ReadSockets.fd_array[j];
+									getpeername(ClosedSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
 									printf("send fail!\n");
-									printf("disconnect client %s\n", inet_ntoa(CloseClientSockAddr.sin_addr));
-									closesocket(ReadSockets.fd_array[i]);
-									FD_CLR(ReadSockets.fd_array[i], &ReadSockets);
+									printf("disconnect client %s\n", inet_ntoa(ClosedSockAddr.sin_addr));
+									FD_CLR(ReadSockets.fd_array[j], &ReadSockets);
+									closesocket(ClosedSocket);
 								}
 							}
 						}

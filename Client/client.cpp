@@ -1,12 +1,14 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WinSock2.h>
 #include <iostream>
+#include <process.h>
 
 #pragma comment(lib, "ws2_32")
 
-// Blocking Server
-// Synchrous
-// Multiplexing (polling)
+char Buffer[1024] = { 0, };
+
+unsigned WINAPI RecvThread(void* Socket);
+unsigned WINAPI SendThread(void* Socket);
 
 int main()
 {
@@ -24,7 +26,53 @@ int main()
 
 	connect(ServerSocket, (SOCKADDR*)&ServerSockAddr, sizeof(ServerSockAddr));
 
-	char Buffer[1024] = { 0, };
+
+	HANDLE ThreadHandles[2];
+
+	ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RecvThread, &ServerSocket, 0, 0);
+	ThreadHandles[1] = (HANDLE)_beginthreadex(0, 0, SendThread, &ServerSocket, 0, 0);
+
+	// Blocking
+	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
+
+	while (true)
+	{
+		
+
+		
+	}
+
+	closesocket(ServerSocket);
+
+	WSACleanup();
+
+	return 0;
+}
+
+unsigned __stdcall RecvThread(void* Socket)
+{
+	SOCKET ServerSocket = *(SOCKET*)Socket;
+
+	while (true)
+	{
+		int RecvBytes = recv(ServerSocket, Buffer, sizeof(Buffer), 0);
+		if (RecvBytes <= 0)
+		{
+			printf("recv fail!\n");
+			break;
+		}
+		else
+		{
+			printf("server send %s\n", Buffer);
+		}
+	}
+
+	return 0;
+}
+
+unsigned __stdcall SendThread(void* Socket)
+{
+	SOCKET ServerSocket = *(SOCKET*)Socket;
 
 	while (true)
 	{
@@ -36,24 +84,7 @@ int main()
 			printf("send fail!\n");
 			break;
 		}
-		else
-		{
-			int RecvBytes = recv(ServerSocket, Buffer, sizeof(Buffer), 0);
-			if (RecvBytes <= 0)
-			{
-				printf("recv fail!\n");
-				break;
-			}
-			else
-			{
-				printf("server send %s\n", Buffer);
-			}
-		}
 	}
-
-	closesocket(ServerSocket);
-
-	WSACleanup();
 
 	return 0;
 }
