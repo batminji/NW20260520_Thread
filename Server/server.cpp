@@ -1,6 +1,7 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WinSock2.h>
 #include <iostream>
+#include "json.hpp"
 
 #pragma comment(lib, "ws2_32")
 

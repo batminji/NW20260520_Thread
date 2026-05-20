@@ -2,10 +2,12 @@
 #include <WinSock2.h>
 #include <iostream>
 #include <process.h>
+#include "json.hpp"
 
 #pragma comment(lib, "ws2_32")
 
-char Buffer[1024] = { 0, };
+char RecvBuffer[1024] = { 0, };
+char SendBuffer[1024] = { 0, };
 
 unsigned WINAPI RecvThread(void* Socket);
 unsigned WINAPI SendThread(void* Socket);
@@ -21,6 +23,7 @@ int main()
 	SOCKADDR_IN ServerSockAddr;
 	memset(&ServerSockAddr, 0, sizeof(ServerSockAddr));
 	ServerSockAddr.sin_family = AF_INET;
+	// ServerSockAddr.sin_addr.s_addr = inet_addr("192.168.0.95");
 	ServerSockAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	ServerSockAddr.sin_port = htons(35000);
 
@@ -38,11 +41,12 @@ int main()
 	while (true)
 	{
 		
-
-		
 	}
 
 	closesocket(ServerSocket);
+
+	CloseHandle(ThreadHandles[0]);
+	CloseHandle(ThreadHandles[1]);
 
 	WSACleanup();
 
@@ -55,7 +59,7 @@ unsigned __stdcall RecvThread(void* Socket)
 
 	while (true)
 	{
-		int RecvBytes = recv(ServerSocket, Buffer, sizeof(Buffer), 0);
+		int RecvBytes = recv(ServerSocket, RecvBuffer, sizeof(RecvBuffer), 0);
 		if (RecvBytes <= 0)
 		{
 			printf("recv fail!\n");
@@ -63,7 +67,7 @@ unsigned __stdcall RecvThread(void* Socket)
 		}
 		else
 		{
-			printf("server send %s\n", Buffer);
+			printf("server send %s\n", RecvBuffer);
 		}
 	}
 
@@ -76,9 +80,9 @@ unsigned __stdcall SendThread(void* Socket)
 
 	while (true)
 	{
-		std::cin.getline(Buffer, sizeof(Buffer));
+		std::cin.getline(SendBuffer, sizeof(SendBuffer));
 
-		int SendBytes = send(ServerSocket, Buffer, sizeof(Buffer), 0);
+		int SendBytes = send(ServerSocket, SendBuffer, sizeof(SendBuffer), 0);
 		if (SendBytes <= 0)
 		{
 			printf("send fail!\n");
