@@ -29,7 +29,8 @@ std::string GenerateRandomID(int Length = 6);
 
 unsigned WINAPI RecvThread(void* Socket);
 unsigned WINAPI SendThread(void* Socket);
-unsigned WINAPI RenderThread(void* Socket);
+// unsigned WINAPI RenderThread(void* Socket);
+void RenderPlayers();
 
 int main()
 {
@@ -52,20 +53,20 @@ int main()
 	connect(ServerSocket, (SOCKADDR*)&ServerSockAddr, sizeof(ServerSockAddr));
 
 
-	HANDLE ThreadHandles[3];
+	HANDLE ThreadHandles[2];
 
 	ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RecvThread, &ServerSocket, 0, 0);
 	ThreadHandles[1] = (HANDLE)_beginthreadex(0, 0, SendThread, &ServerSocket, 0, 0);
-	ThreadHandles[2] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
+	// ThreadHandles[2] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
 
 	// Blocking
-	WaitForMultipleObjects(3, ThreadHandles, FALSE, INFINITE);
+	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
 
 	closesocket(ServerSocket);
 
 	CloseHandle(ThreadHandles[0]);
 	CloseHandle(ThreadHandles[1]);
-	CloseHandle(ThreadHandles[2]);
+	// CloseHandle(ThreadHandles[2]);
 
 	WSACleanup();
 
@@ -105,10 +106,11 @@ unsigned __stdcall RecvThread(void* Socket)
 
 		for (const PlayerData& Player : Data.Players)
 		{
-			std::cout << "[" << Player.UserID << "]" << " X: " << Player.PlayerX << " Y : " << Player.PlayerY << std::endl;
+			// std::cout << "[" << Player.UserID << "]" << " X: " << Player.PlayerX << " Y : " << Player.PlayerY << std::endl;
 			AllPlayers[Player.UserID] = { Player.PlayerX , Player.PlayerY };
 		}
-		std::cout << "--------------------------" << std::endl;
+		// std::cout << "--------------------------" << std::endl;
+		RenderPlayers();
 	}
 
 	return 0;
@@ -120,20 +122,6 @@ unsigned __stdcall SendThread(void* Socket)
 
 	while (true)
 	{
-		// std::cin.getline(SendBuffer, sizeof(SendBuffer));
-		// ChatPacket Data;
-		// Data.UserID = "junios";
-		// Data.UserX = 0;
-		// Data.UserY = 0;
-		// std::string JSONString = Data.ToString();
-		// 
-		// //그냥 1 : 1로 주고 받는다.
-		// int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
-		// if (SentBytes <= 0)
-		// {
-		// 	printf("send fail!\n");
-		// 	break;
-		// }
 		if (_kbhit())
 		{
 			char Key = _getch();
@@ -177,26 +165,19 @@ unsigned __stdcall SendThread(void* Socket)
 	return 0;
 }
 
-unsigned __stdcall RenderThread(void* Socket)
+void RenderPlayers()
 {
-	while (true)
+	system("cls");
+	for (const auto& Player : AllPlayers)
 	{
-		while (true)
+		if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
+			&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
 		{
-			system("cls");
-			for (const auto& Player : AllPlayers)
+			GotoXY(Player.second.PlayerX, Player.second.PlayerY);
+			if (!Player.first.empty())
 			{
-				if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
-					&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
-				{
-					GotoXY(Player.second.PlayerX, Player.second.PlayerY);
-					if (!Player.first.empty())
-					{
-						printf("%c", Player.first[Player.first.length() - 1]);
-					}
-				}
+				printf("%c", Player.first[Player.first.length() - 1]);
 			}
 		}
 	}
-	return 0;
 }

@@ -25,7 +25,8 @@ struct PlayerInfo
 
 std::map<SOCKET, PlayerInfo> ClientPlayers;
 
-unsigned WINAPI RenderThread(void* Socket);
+// unsigned WINAPI RenderThread(void* Socket);
+void RenderPlayers();
 
 int main()
 {
@@ -58,9 +59,9 @@ int main()
 	char Buffer[1024] = { 0, };
 
 	// Thread
-	HANDLE ThreadHandles[1];
+	// HANDLE ThreadHandles[1];
 
-	ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
+	// ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
 
 	while (true)
 	{
@@ -73,6 +74,7 @@ int main()
 			continue;
 		}
 
+		RenderPlayers();
 		for (int i = 0; i < ReadSockets.fd_count; ++i)
 		{
 			if (FD_ISSET(ReadSockets.fd_array[i], &CopyReadSockets))
@@ -191,31 +193,26 @@ int main()
 
 	closesocket(ListenSocket);
 
-	CloseHandle(ThreadHandles[0]);
+	// CloseHandle(ThreadHandles[0]);
 
 	WSACleanup();
 
 	return 0;
 }
 
-unsigned WINAPI RenderThread(void* Socket)
+void RenderPlayers()
 {
-	while (true)
+	system("cls");
+	for (const auto& Player : ClientPlayers)
 	{
-		system("cls");
-		for (const auto& Player : ClientPlayers)
+		if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
+			&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
 		{
-			if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
-				&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
+			GotoXY(Player.second.PlayerX, Player.second.PlayerY);
+			if (!Player.second.UserID.empty())
 			{
-				GotoXY(Player.second.PlayerX, Player.second.PlayerY);
-				if (!Player.second.UserID.empty())
-				{
-					printf("%c", Player.second.UserID[Player.second.UserID.length() - 1]);
-				}
+				printf("%c", Player.second.UserID[Player.second.UserID.length() - 1]);
 			}
 		}
 	}
-
-	return 0;
 }
