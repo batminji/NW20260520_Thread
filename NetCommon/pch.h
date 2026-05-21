@@ -14,9 +14,7 @@
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
-
-#include <string>
-#include <vector>
+#include "utility.h"
 
 using namespace rapidjson;
 

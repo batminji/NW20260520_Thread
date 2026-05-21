@@ -6,6 +6,7 @@
 
 #include <WinSock2.h>
 #include <iostream>
+#include <map>
 #include <process.h>
 #include <conio.h>
 
@@ -15,12 +16,20 @@
 char RecvBuffer[2048] = { 0, };
 char SendBuffer[1024] = { 0, };
 
+struct PlayerInfo
+{
+	int PlayerX = 0;
+	int PlayerY = 0;
+};
+
 std::string PlayerUserID;
+std::map<std::string, PlayerInfo> AllPlayers;
 
 std::string GenerateRandomID(int Length = 6);
 
 unsigned WINAPI RecvThread(void* Socket);
 unsigned WINAPI SendThread(void* Socket);
+unsigned WINAPI RenderThread(void* Socket);
 
 int main()
 {
@@ -43,18 +52,20 @@ int main()
 	connect(ServerSocket, (SOCKADDR*)&ServerSockAddr, sizeof(ServerSockAddr));
 
 
-	HANDLE ThreadHandles[2];
+	HANDLE ThreadHandles[3];
 
 	ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RecvThread, &ServerSocket, 0, 0);
 	ThreadHandles[1] = (HANDLE)_beginthreadex(0, 0, SendThread, &ServerSocket, 0, 0);
+	ThreadHandles[2] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
 
 	// Blocking
-	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
+	WaitForMultipleObjects(3, ThreadHandles, FALSE, INFINITE);
 
 	closesocket(ServerSocket);
 
 	CloseHandle(ThreadHandles[0]);
 	CloseHandle(ThreadHandles[1]);
+	CloseHandle(ThreadHandles[2]);
 
 	WSACleanup();
 
@@ -95,6 +106,7 @@ unsigned __stdcall RecvThread(void* Socket)
 		for (const PlayerData& Player : Data.Players)
 		{
 			std::cout << "[" << Player.UserID << "]" << " X: " << Player.PlayerX << " Y : " << Player.PlayerY << std::endl;
+			AllPlayers[Player.UserID] = { Player.PlayerX , Player.PlayerY };
 		}
 		std::cout << "--------------------------" << std::endl;
 	}
@@ -162,5 +174,29 @@ unsigned __stdcall SendThread(void* Socket)
 		}
 	}
 
+	return 0;
+}
+
+unsigned __stdcall RenderThread(void* Socket)
+{
+	while (true)
+	{
+		while (true)
+		{
+			system("cls");
+			for (const auto& Player : AllPlayers)
+			{
+				if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
+					&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
+				{
+					GotoXY(Player.second.PlayerX, Player.second.PlayerY);
+					if (!Player.first.empty())
+					{
+						printf("%c", Player.first[Player.first.length() - 1]);
+					}
+				}
+			}
+		}
+	}
 	return 0;
 }
