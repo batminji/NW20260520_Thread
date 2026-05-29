@@ -1,38 +1,253 @@
-ï»¿#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#include "ChatPacket.h"
-#include "CS_PlayerDir.h"
-#include "SC_PlayerPos.h"
+#include "NetUtil.h"
 
-#include <WinSock2.h>
+#include <winsock2.h>
 #include <iostream>
-#include <process.h>
-#include "json.hpp"
+
+
 
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "NetCommon")
 
-// Blocking Server
-// Synchrous
-// Multiplexing (polling)
+using namespace std;
 
-struct PlayerInfo 
+char Buffer[65536] = { 0, };
+
+SessionManager MySessionManager;
+
+void DisconnectSocket(SOCKET DisconnectedSocket, fd_set* Sockets)
 {
-	std::string UserID = "";
-	int PlayerX = 0;
-	int PlayerY = 0;
-};
+	SOCKET ClosedSocket = DisconnectedSocket;
 
-std::map<SOCKET, PlayerInfo> ClientPlayers;
+	SOCKADDR_IN ClosedSockAddr;
+	memset(&ClosedSockAddr, 0, sizeof(ClosedSockAddr));
+	int ClosedSockAddrLength = sizeof(ClosedSockAddr);
 
-// unsigned WINAPI RenderThread(void* Socket);
-void RenderPlayers();
+	getpeername(ClosedSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
 
+	cout << "disconnect : " << ClosedSocket << endl;
+
+	cout << "disconnect : " << inet_ntoa(ClosedSockAddr.sin_addr) << endl;
+	
+	FD_CLR(ClosedSocket, Sockets);
+	closesocket(ClosedSocket);
+
+	flatbuffers::FlatBufferBuilder SendBuilder;
+
+	auto DestroyData = UserPacket::CreateS2C_Destroy(
+		SendBuilder,
+		(uint16_t)ClosedSocket
+	);
+
+	auto UserPacketData = UserPacket::CreatePacketData(
+		SendBuilder,
+		UserPacket::PacketType_S2C_Destroy,
+		DestroyData.Union()
+	);
+
+	SendBuilder.Finish(UserPacketData);
+	
+	//dangling pointer
+	Session* FindSession = MySessionManager.GetSession(ClosedSocket);
+	MySessionManager.Delete(*FindSession);
+
+
+	//¸ðµç À¯ÀúÇÑÅ× ÀÌµ¿ ÆÐÅ¶ º¸³»ÁÜ
+	for (auto Receiver : MySessionManager.SessionList)
+	{
+		SendAll(Receiver.ClientSocket, SendBuilder);
+	}
+}
+
+
+
+void ProcessPacket(SOCKET ProcessSocket, const char* InBuffer)
+{
+	auto UserPacketData = UserPacket::GetPacketData(InBuffer);
+
+	switch (UserPacketData->data_type())
+	{
+		case UserPacket::PacketType_C2S_Login:
+		{
+
+			auto LoginPacket = UserPacketData->data_as_C2S_Login();
+
+			Session InSession;
+			InSession.ClientSocket = ProcessSocket;
+			InSession.UserID = LoginPacket->user_id()->c_str();
+			InSession.X = rand() % 640;
+			InSession.Y = rand() % 480;
+			InSession.R = rand() % 255;
+			InSession.G = rand() % 255;
+			InSession.B = rand() % 255;
+
+			InSession.Shape = 65 + (rand() % 26);
+
+			MySessionManager.Add(InSession);
+			//Á¢¼Ó ÇÑ ¾ÆÀÌÇÑÅ× È®ÀÎ ÆÐÅ¶(S2C_Login)
+
+			flatbuffers::FlatBufferBuilder SendBuilder;
+
+			auto S2C_Login_Data = UserPacket::CreateS2C_Login(
+				SendBuilder,
+				(uint16_t)ProcessSocket,
+				SendBuilder.CreateString("Welcome.")
+			);
+
+			auto UserPacketData = UserPacket::CreatePacketData(
+				SendBuilder,
+				UserPacket::PacketType_S2C_Login,
+				S2C_Login_Data.Union()
+			);
+
+			SendBuilder.Finish(UserPacketData);
+			SendAll(ProcessSocket, SendBuilder);
+
+			//Á¢¼ÓÇÑ ¸ðµç À¯ÀúÇÑÅ× ÇöÀç ¸ðµç À¯ÀúÀÇ Á¤º¸¸¦ º¸³»ÁØ´Ù.
+			for (auto Item : MySessionManager.SessionList)
+			{
+				flatbuffers::FlatBufferBuilder LoginSendBuilder;
+
+				UserPacket::FVector2D Position(Item.X, Item.Y);
+				UserPacket::FColor Color(Item.R, Item.G, Item.B);
+				auto SpawnData = UserPacket::CreateS2C_Spawn(
+					LoginSendBuilder,
+					(uint16_t)Item.ClientSocket,
+					&Position,
+					&Color,
+					Item.Shape
+				);
+
+				auto UserSpawnPacketData = UserPacket::CreatePacketData(
+					LoginSendBuilder,
+					UserPacket::PacketType_S2C_Spawn,
+					SpawnData.Union()
+				);
+
+				LoginSendBuilder.Finish(UserSpawnPacketData);
+
+				for (auto Receiver : MySessionManager.SessionList)
+				{
+					int SentBytes = SendAll(Receiver.ClientSocket, LoginSendBuilder);
+					if (SentBytes <= 0)
+					{
+						std::cout << "header send fail." << endl;
+					}
+				}
+			}
+		}
+		break;
+
+		case UserPacket::PacketType_C2S_Move:
+		{
+			flatbuffers::FlatBufferBuilder SendBuilder;
+
+			auto MovePacket = UserPacketData->data_as_C2S_Move();
+			Session* FindSession = MySessionManager.GetSession((SOCKET)MovePacket->client_socket_id());
+			switch (MovePacket->direction())
+			{
+				case 'W':
+				case 'w':
+					 FindSession->Y--;
+					 break;
+				case 'S':
+				case 's':
+					FindSession->Y++;
+					break;
+				case 'A':
+				case 'a':
+					FindSession->X--;
+					break;
+				case 'D':
+				case 'd':
+					FindSession->X++;
+					break;
+			}
+
+			UserPacket::FVector2D Position(FindSession->X, FindSession->Y);
+			auto S2C_MoveData = UserPacket::CreateS2C_Move(
+				SendBuilder,
+				(uint16_t)FindSession->ClientSocket,
+				&Position
+			);
+
+			//std::cout << FindSession->ClientSocket << std::endl;
+
+			auto MoveData = UserPacket::CreatePacketData(
+				SendBuilder,
+				UserPacket::PacketType_S2C_Move,
+				S2C_MoveData.Union()
+			);
+
+			SendBuilder.Finish(MoveData);
+
+			//¸ðµç À¯ÀúÇÑÅ× ÀÌµ¿ ÆÐÅ¶ º¸³»ÁÜ
+			for (auto Receiver : MySessionManager.SessionList)
+			{
+				int SentBytes = SendAll(Receiver.ClientSocket, SendBuilder);
+				if (SentBytes <= 0)
+				{
+					std::cout << "move send fail." << endl;
+				}
+			}
+		}
+		break;
+
+		case UserPacket::PacketType_C2S_ChangeColor:
+		{
+			flatbuffers::FlatBufferBuilder SendBuilder;
+
+			auto ChangeColorPacket = UserPacketData->data_as_C2S_ChangeColor();
+
+			Session* ChangeSession = MySessionManager.GetSession((SOCKET)ChangeColorPacket->client_socket_id());
+
+			ChangeSession->R = rand() % 255;
+			ChangeSession->G = rand() % 255;
+			ChangeSession->B = rand() % 255;
+
+			UserPacket::FColor Color(ChangeSession->R, ChangeSession->G, ChangeSession->B);
+
+			auto S2C_ColorData = UserPacket::CreateS2C_ChangeColor(
+				SendBuilder,
+				ChangeColorPacket->client_socket_id(),
+				&Color
+			);
+
+			auto UserPacketData = UserPacket::CreatePacketData(
+				SendBuilder,
+				UserPacket::PacketType_S2C_ChangeColor,
+				S2C_ColorData.Union()
+			);
+
+			SendBuilder.Finish(UserPacketData);
+
+			//¸ðµç À¯ÀúÇÑÅ× ÀÌµ¿ ÆÐÅ¶ º¸³»ÁÜ
+			for (auto Receiver : MySessionManager.SessionList)
+			{
+				int SentBytes = SendAll(Receiver.ClientSocket, SendBuilder);
+				if (SentBytes <= 0)
+				{
+					std::cout << "change color send fail." << endl;
+				}
+			}
+		}
+		break;
+	}
+
+
+}
+
+//blocking, synchrous, multiplexing(polling)
 int main()
 {
+	srand((unsigned int)time(nullptr));
+
+	cout << "server start" << endl;
+
 	WSAData wsaData;
-	int retval = 0;
-	retval = WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
 
 	SOCKET ListenSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -42,177 +257,83 @@ int main()
 	ListenSockAddr.sin_addr.s_addr = INADDR_ANY;
 	ListenSockAddr.sin_port = htons(35000);
 
-	retval = ::bind(ListenSocket, (SOCKADDR*)&ListenSockAddr, sizeof(ListenSockAddr));
+	//already use port ÀÌ¹Ì Æ÷Æ® »ç¿ëÁß
+	::bind(ListenSocket, (SOCKADDR*)&ListenSockAddr, sizeof(ListenSockAddr));
 
 	listen(ListenSocket, SOMAXCONN);
 
-	// Blocking, synchronous(Time Out) - ì„±ëŠ¥ì€ ë–¨ì–´ì§, í˜¸í™˜ì„±(Windows, Linux, Mac), ì‰¬ì›Œì„œ ì‚¬ìš©
+
+
+	//blocking, synchronous(TimeOut)
 	TIMEVAL TimeOut;
 	TimeOut.tv_sec = 0;
 	TimeOut.tv_usec = 500000;
 
 	fd_set ReadSockets;
 	fd_set CopyReadSockets;
+
 	FD_ZERO(&ReadSockets);
 	FD_SET(ListenSocket, &ReadSockets);
-
-	char Buffer[1024] = { 0, };
-
-	// Thread
-	// HANDLE ThreadHandles[1];
-
-	// ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
 
 	while (true)
 	{
 		CopyReadSockets = ReadSockets;
 
-		// Blocking (TimeOut ë§ˆë‹¤) (TimeOutì´ 0ì´ë©´ ë¬´í•œížˆ ê¸°ë‹¤ë¦¼)
+		//0.5ÃÊ¾¿ blocking
 		int ChangeCount = select(0, &CopyReadSockets, 0, 0, &TimeOut);
+
 		if (ChangeCount <= 0)
 		{
+			//Server Work
+			//0.5ÃÊÇÑ¹ø ¼­¹ö ÀÛ¾÷À» ÇÏ´Â°Å
 			continue;
 		}
 
-		RenderPlayers();
-		for (int i = 0; i < ReadSockets.fd_count; ++i)
+		//¸ó°¡ ÀÚ·á ÀÖ´Ù.
+		for (int i = 0; i < (int)ReadSockets.fd_count; ++i)
 		{
 			if (FD_ISSET(ReadSockets.fd_array[i], &CopyReadSockets))
 			{
 				if (ReadSockets.fd_array[i] == ListenSocket)
 				{
-					// ì‹ ê·œ ì ‘ì†
+					//connect process
 					SOCKADDR_IN ClientSockAddr;
 					memset(&ClientSockAddr, 0, sizeof(ClientSockAddr));
-					int ClientSockLength = sizeof(ClientSockAddr);
+					int ClientSockSockLength = sizeof(ClientSockAddr);
 
-					// Blocking
-					SOCKET ClientSocket = accept(ListenSocket, (SOCKADDR*)&ClientSockAddr, &ClientSockLength);
+					//blocking, synchronous
+					SOCKET ClientSocket = accept(ListenSocket, (SOCKADDR*)&ClientSockAddr, &ClientSockSockLength);
 
-					printf("connect client %s\n", inet_ntoa(ClientSockAddr.sin_addr));
+					cout << "connect client " << inet_ntoa(ClientSockAddr.sin_addr) << endl;
 
 					FD_SET(ClientSocket, &ReadSockets);
-
-					PlayerInfo NewPlayer;
-					NewPlayer.PlayerX = 0;
-					NewPlayer.PlayerY = 0;
-					ClientPlayers[ClientSocket] = NewPlayer;
 				}
 				else
 				{
-					// ê¸°ì¡´ í´ë¼
-					SOCKET CurrentClientSocket = ReadSockets.fd_array[i];
-
-					// Recv
-					memset(Buffer, 0, sizeof(Buffer));
-					int RecvBytes = recv(CurrentClientSocket, Buffer, sizeof(Buffer), 0);
-
-					// ì ‘ì† ì¢…ë£Œ
+					//Data Receive
+					int RecvBytes = RecvAll(ReadSockets.fd_array[i], Buffer);
 					if (RecvBytes <= 0)
 					{
-						SOCKADDR_IN CloseClientSockAddr;
-						memset(&CloseClientSockAddr, 0, sizeof(CloseClientSockAddr));
-						int CloseClientSockLength = sizeof(CloseClientSockAddr);
-
-						getpeername(CurrentClientSocket, (SOCKADDR*)&CloseClientSockAddr, &CloseClientSockLength);
-						printf("disconnect client %s\n", inet_ntoa(CloseClientSockAddr.sin_addr));
-						ClientPlayers.erase(CurrentClientSocket); // mapì—ì„œ ì œê±°
-						closesocket(CurrentClientSocket);
-						FD_CLR(CurrentClientSocket, &ReadSockets);
+						cout << "data recv fail " << endl;
+						DisconnectSocket(ReadSockets.fd_array[i], &ReadSockets);
+						continue;
 					}
 					else
 					{
-						Buffer[RecvBytes] = '\0';
-
-						CS_PlayerDir RecvPacket;
-						RecvPacket.Parse(Buffer);
-
-						ClientPlayers[CurrentClientSocket].UserID = RecvPacket.UserID;
-
-						if (RecvPacket.Dir == 'W' || RecvPacket.Dir == 'w')
-						{
-							ClientPlayers[CurrentClientSocket].PlayerY -= 1;
-						}
-						else if (RecvPacket.Dir == 'S' || RecvPacket.Dir == 's')
-						{
-							ClientPlayers[CurrentClientSocket].PlayerY += 1;
-						}
-						else if (RecvPacket.Dir == 'A' || RecvPacket.Dir == 'a')
-						{
-							ClientPlayers[CurrentClientSocket].PlayerX -= 1;
-						}
-						else if (RecvPacket.Dir == 'D' || RecvPacket.Dir == 'd')
-						{
-							ClientPlayers[CurrentClientSocket].PlayerX += 1;
-						}
-
-						// std::cout << RecvPacket.UserID << " X: " << ClientPlayers[CurrentClientSocket].PlayerX << " Y: " << ClientPlayers[CurrentClientSocket].PlayerY << std::endl;
-
-						SC_PlayerPos SendPacket;
-						for (const auto& Player : ClientPlayers)
-						{
-							PlayerData Data;
-							Data.UserID = Player.second.UserID;
-							Data.PlayerX = Player.second.PlayerX;
-							Data.PlayerY = Player.second.PlayerY;
-							SendPacket.Players.push_back(Data);
-						}
-
-						std::string JSONOutput = SendPacket.ToString();
-
-						// ë¸Œë¡œë“œ ìºìŠ¤íŠ¸
-						for (int j = 0; j < (int)ReadSockets.fd_count; ++j)
-						{
-							SOCKET CurrentClientSocket = ReadSockets.fd_array[j];
-
-							if (CurrentClientSocket != ListenSocket)
-							{
-								int SentBytes = send(CurrentClientSocket, JSONOutput.c_str(), (int)JSONOutput.length(), 0);
-
-								if (SentBytes <= 0)
-								{
-									SOCKADDR_IN ClosedSockAddr;
-									memset(&ClosedSockAddr, 0, sizeof(ClosedSockAddr));
-									int ClosedSockAddrLength = sizeof(ClosedSockAddr);
-
-									getpeername(CurrentClientSocket, (SOCKADDR*)&ClosedSockAddr, &ClosedSockAddrLength);
-									printf("send fail!\n");
-									printf("disconnect client %s\n", inet_ntoa(ClosedSockAddr.sin_addr));
-
-									ClientPlayers.erase(CurrentClientSocket);
-									FD_CLR(CurrentClientSocket, &ReadSockets);
-									closesocket(CurrentClientSocket);
-								}
-							}
-						}
+						ProcessPacket(ReadSockets.fd_array[i], Buffer);
 					}
 				}
 			}
 		}
 	}
 
+
+
+
+
+
 	closesocket(ListenSocket);
-
-	// CloseHandle(ThreadHandles[0]);
-
 	WSACleanup();
 
 	return 0;
-}
-
-void RenderPlayers()
-{
-	system("cls");
-	for (const auto& Player : ClientPlayers)
-	{
-		if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
-			&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
-		{
-			GotoXY(Player.second.PlayerX, Player.second.PlayerY);
-			if (!Player.second.UserID.empty())
-			{
-				printf("%c", Player.second.UserID[Player.second.UserID.length() - 1]);
-			}
-		}
-	}
 }

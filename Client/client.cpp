@@ -1,45 +1,65 @@
-Ôªø#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
-#include "ChatPacket.h"
-#include "CS_PlayerDir.h"
-#include "SC_PlayerPos.h"
+#include "NetUtil.h"
 
-#include <WinSock2.h>
+#include <Windows.h>
 #include <iostream>
-#include <map>
 #include <process.h>
 #include <conio.h>
+#include "SDL.h"
+#include <mutex>
+#include <queue>
 
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "NetCommon")
+#pragma comment(lib, "SDL2")
+#pragma comment(lib, "SDL2main")
 
-char RecvBuffer[2048] = { 0, };
-char SendBuffer[1024] = { 0, };
 
-struct PlayerInfo
+using namespace std;
+
+char RecvBuffer[65536] = { 0, };
+
+bool IsRecvThreadRunning = true;
+bool IsSendThreadRunning = true;
+
+//ActorList
+SessionManager MySessionManager;
+SOCKET MyClientID;
+
+SDL_Window* MyWindow;
+SDL_Renderer* MyRenderer;
+
+
+std::mutex SessionLock;
+std::mutex KeyBufferLock;
+
+
+void Render();
+void ProcessPacket(SOCKET ProcessSocket, const char* InBuffer);
+unsigned WINAPI RecvThread(void* Argument);
+unsigned WINAPI SendThread(void* Argument);
+
+//queue
+std::queue<int> KeyBuffer;
+//KeyBuffer -> PacketBuffer
+
+int SDL_main(int Argc, char* Argv[])
 {
-	int PlayerX = 0;
-	int PlayerY = 0;
-};
+	//Object µø±‚»≠(Lock, Lockfree)
+	//GameThread(Render)
+	//NetworkThread
 
-std::string PlayerUserID;
-std::map<std::string, PlayerInfo> AllPlayers;
-
-std::string GenerateRandomID(int Length = 6);
-
-unsigned WINAPI RecvThread(void* Socket);
-unsigned WINAPI SendThread(void* Socket);
-// unsigned WINAPI RenderThread(void* Socket);
-void RenderPlayers();
-
-int main()
-{
-	srand((unsigned int)time(nullptr));
-	PlayerUserID = GenerateRandomID();
+	std::cout << "client " << endl;
 
 	WSAData wsaData;
-	int retval = 0;
-	retval = WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	SDL_Init(SDL_INIT_EVERYTHING);
+	MyWindow = SDL_CreateWindow("SDL", 100, 100, 640, 480, SDL_WINDOW_OPENGL);
+	MyRenderer = SDL_CreateRenderer(MyWindow, -1, SDL_RENDERER_ACCELERATED || SDL_RENDERER_PRESENTVSYNC || SDL_RENDERER_TARGETTEXTURE);
+
 
 	SOCKET ServerSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -52,132 +72,297 @@ int main()
 
 	connect(ServerSocket, (SOCKADDR*)&ServerSockAddr, sizeof(ServerSockAddr));
 
+	std::cout << "client connect" << endl;
 
-	HANDLE ThreadHandles[2];
+	//[][] [][][][] [][][][] 
+	//memory(Data) -> ByteArray(char []) -> Serialize(flatbuffer)
+	flatbuffers::FlatBufferBuilder SendBuilder;
+	auto C2S_LoginData = UserPacket::CreateC2S_Login(
+		SendBuilder,
+		SendBuilder.CreateString("minji"),
+		SendBuilder.CreateString("1as3f356dsd6gyhg")
+	);
+
+	auto UserPacketData = UserPacket::CreatePacketData(
+		SendBuilder,
+		UserPacket::PacketType_C2S_Login,
+		C2S_LoginData.Union()
+	);
+
+	SendBuilder.Finish(UserPacketData);
+
+	SendAll(ServerSocket, SendBuilder);
+
+	HANDLE ThreadHandles[2] = { 0, };
 
 	ThreadHandles[0] = (HANDLE)_beginthreadex(0, 0, RecvThread, &ServerSocket, 0, 0);
 	ThreadHandles[1] = (HANDLE)_beginthreadex(0, 0, SendThread, &ServerSocket, 0, 0);
-	// ThreadHandles[2] = (HANDLE)_beginthreadex(0, 0, RenderThread, nullptr, 0, 0);
 
-	// Blocking
+
+	const Uint8* KeyState = SDL_GetKeyboardState(NULL);
+
+	while (true)
+	{
+		SDL_Event MyEvent;
+		SDL_PollEvent(&MyEvent);
+		if (MyEvent.type == SDL_QUIT)
+		{
+			IsRecvThreadRunning = false;
+			IsSendThreadRunning = false;
+			break;
+		}
+		else if (MyEvent.type == SDL_KEYDOWN)
+		{
+			if (KeyState[SDL_SCANCODE_ESCAPE])
+			{
+				IsRecvThreadRunning = false;
+				IsSendThreadRunning = false;
+				break;
+			}
+			int KeyCode = 0;
+			if (KeyState[SDL_SCANCODE_W])
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				KeyBuffer.push('W');
+			}
+			if (KeyState[SDL_SCANCODE_S])
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				KeyBuffer.push('S');
+			}
+			if (KeyState[SDL_SCANCODE_A])
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				KeyBuffer.push('A');
+			}
+			if (KeyState[SDL_SCANCODE_D])
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				KeyBuffer.push('D');
+			}
+			if (KeyState[SDL_SCANCODE_C])
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				KeyBuffer.push('C');
+			}
+		}
+
+		Render();
+	}
+
+	//blocking
 	WaitForMultipleObjects(2, ThreadHandles, FALSE, INFINITE);
 
 	closesocket(ServerSocket);
 
+	cout << "End Thread" << endl;
+
+	//TerminateThread(ThreadHandles[0], 0);
+	//TerminateThread(ThreadHandles[1], 0);
+	IsSendThreadRunning = false;
+	IsRecvThreadRunning = false;
+
+
 	CloseHandle(ThreadHandles[0]);
 	CloseHandle(ThreadHandles[1]);
-	// CloseHandle(ThreadHandles[2]);
 
 	WSACleanup();
 
+	SDL_DestroyWindow(MyWindow);
+	SDL_Quit();
+
 	return 0;
 }
 
-std::string GenerateRandomID(int Length)
-{
-	const char Chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-	const int CharsLen = (int)(sizeof(Chars) - 1);
 
-	std::string Result = "user_";
-	for (int i = 0; i < Length; ++i)
+void Render()
+{
+	//system("cls");
+
+	//for (auto Player : MySessionManager.SessionList)
+	//{
+	//	COORD Where;
+	//	Where.X = Player.X;
+	//	Where.Y = Player.Y;
+	//	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), Where);
+	//	std::cout << (char)Player.Shape << endl;
+	//}
+
+
+	SDL_SetRenderDrawColor(MyRenderer, 0, 0, 0, 0);
+	SDL_RenderClear(MyRenderer);
+
 	{
-		Result += Chars[rand() % CharsLen];
+		lock_guard<std::mutex> lock(SessionLock);
+		//SessionLock.lock();
+		for (auto Player : MySessionManager.SessionList)
+		{
+			SDL_SetRenderDrawColor(MyRenderer, Player.R, Player.G, Player.B, 0);
+			SDL_Rect MyRect = { Player.X, Player.Y, 30, 30 };
+			SDL_RenderFillRect(MyRenderer, &MyRect);
+		}
+		//SessionLock.unlock();
 	}
 
-	return Result;
+
+	SDL_RenderPresent(MyRenderer);
+
 }
 
-unsigned __stdcall RecvThread(void* Socket)
+void ProcessPacket(SOCKET ProcessSocket, const char* InBuffer)
 {
-	SOCKET ServerSocket = *(SOCKET*)Socket;
+	auto UserPacketData = UserPacket::GetPacketData(InBuffer);
 
-	while (true)
+	//std::cout << EnumNamePacketType(UserPacketData->data_type()) << std::endl;
+
+	switch (UserPacketData->data_type())
 	{
-		int RecvBytes = recv(ServerSocket, RecvBuffer, sizeof(RecvBuffer), 0);
+		case UserPacket::PacketType_S2C_Login:
+		{
+			MyClientID = UserPacketData->data_as_S2C_Login()->client_socket_id();
+		}
+		break;
+		case UserPacket::PacketType_S2C_Spawn:
+		{
+			Session InSession;
+			auto SpawnData = UserPacketData->data_as_S2C_Spawn();
+			InSession.ClientSocket = SpawnData->client_socket_id();
+			InSession.Shape = SpawnData->shape();
+			InSession.X = SpawnData->position()->x();
+			InSession.Y = SpawnData->position()->y();
+			InSession.R = SpawnData->color()->r();
+			InSession.G = SpawnData->color()->g();
+			InSession.B = SpawnData->color()->b();
+
+			{
+				lock_guard<std::mutex> lock(SessionLock);
+				MySessionManager.Add(InSession);
+			}
+			//		Render();
+		}
+		break;
+		case UserPacket::PacketType_S2C_Move:
+		{
+			auto MoveData = UserPacketData->data_as_S2C_Move();
+
+			SOCKET SocketID = MoveData->client_socket_id();
+			Session* FindSession = MySessionManager.GetSession(SocketID);
+			FindSession->X = MoveData->position()->x();
+			FindSession->Y = MoveData->position()->y();
+		}
+		break;
+		case UserPacket::PacketType_S2C_Destroy:
+		{
+			auto DestroyPacket = UserPacketData->data_as_S2C_Destroy();
+
+			Session* FindSession = MySessionManager.GetSession((SOCKET)DestroyPacket->client_socket_id());
+			{
+				lock_guard<std::mutex> lock(SessionLock);
+				MySessionManager.Delete(*FindSession);
+			}
+		}
+		break;
+
+		case UserPacket::PacketType_S2C_ChangeColor:
+		{
+			auto ColorPacket = UserPacketData->data_as_S2C_ChangeColor();
+
+			{
+				lock_guard<std::mutex> lock(SessionLock);
+				Session* FindSession = MySessionManager.GetSession((SOCKET)ColorPacket->client_socket_id());
+				FindSession->R = ColorPacket->color()->r();
+				FindSession->G = ColorPacket->color()->g();
+				FindSession->B = ColorPacket->color()->b();
+			}
+		}
+		break;
+	}
+}
+
+
+
+unsigned WINAPI RecvThread(void* Argument)
+{
+	SOCKET ServerSocket = *(SOCKET*)Argument;
+
+	while (IsRecvThreadRunning)
+	{
+		memset(RecvBuffer, 0, sizeof(RecvBuffer));
+		int RecvBytes = RecvAll(ServerSocket, RecvBuffer);
 		if (RecvBytes <= 0)
 		{
-			printf("recv fail!\n");
+			std::cout << "recv fail " << endl;
 			break;
 		}
-		RecvBuffer[RecvBytes] = '\0';
 
-		SC_PlayerPos Data;
-		Data.Parse(RecvBuffer);
-
-		for (const PlayerData& Player : Data.Players)
-		{
-			// std::cout << "[" << Player.UserID << "]" << " X: " << Player.PlayerX << " Y : " << Player.PlayerY << std::endl;
-			AllPlayers[Player.UserID] = { Player.PlayerX , Player.PlayerY };
-		}
-		// std::cout << "--------------------------" << std::endl;
-		RenderPlayers();
+		ProcessPacket(ServerSocket, RecvBuffer);
 	}
+
 
 	return 0;
 }
 
-unsigned __stdcall SendThread(void* Socket)
+unsigned WINAPI SendThread(void* Argument)
 {
-	SOCKET ServerSocket = *(SOCKET*)Socket;
+	//√•¿”¿∫ ªÁøÎ«œ¥¬ ≥¿Ã ¡¯¥Ÿ.
+	SOCKET ServerSocket = *(SOCKET*)Argument;
 
-	while (true)
+	while (IsSendThreadRunning)
 	{
-		if (_kbhit())
+		if (KeyBuffer.empty())
 		{
-			char Key = _getch();
-			char Dir = ' ';
+			YieldProcessor();
+			//Sleep(0);
+			continue;
 
-			if (Key == 'w' || Key == 'W')
-			{
-				Dir = 'W';
-			}
-			else if (Key == 's' || Key == 'S')
-			{
-				Dir = 'S';
-			}
-			else if (Key == 'a' || Key == 'A')
-			{
-				Dir = 'A';
-			}
-			else if (Key == 'd' || Key == 'D')
-			{
-				Dir = 'D';
-			}
-
-			if (Dir != ' ')
-			{
-				CS_PlayerDir PlayerDirPacket;
-				PlayerDirPacket.UserID = PlayerUserID;
-				PlayerDirPacket.Dir = Dir;
-
-				std::string JSONString = PlayerDirPacket.ToString();
-
-				int SentBytes = send(ServerSocket, JSONString.c_str(), (int)JSONString.length(), 0);
-				if (SentBytes <= 0)
-				{
-					printf("send fail!\n");
-					break;
-				}
-			}
 		}
+		flatbuffers::FlatBufferBuilder SendBuilder;
+
+		if (KeyBuffer.front() == 'C')
+		{
+			flatbuffers::Offset<UserPacket::C2S_ChangeColor> C2S_ColorData;
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				C2S_ColorData = UserPacket::CreateC2S_ChangeColor(
+					SendBuilder,
+					(uint16_t)MyClientID
+				);
+				KeyBuffer.pop();
+			}
+
+			auto UserPacketData = UserPacket::CreatePacketData(
+				SendBuilder,
+				UserPacket::PacketType_C2S_ChangeColor,
+				C2S_ColorData.Union()
+			);
+
+			SendBuilder.Finish(UserPacketData);
+		}
+		else
+		{
+			flatbuffers::Offset<UserPacket::C2S_Move> C2S_MoveData;
+			{
+				lock_guard<std::mutex> KeyLock(KeyBufferLock);
+				C2S_MoveData = UserPacket::CreateC2S_Move(
+					SendBuilder,
+					(uint16_t)MyClientID,
+					KeyBuffer.front()
+				);
+				KeyBuffer.pop();
+			}
+
+			auto UserPacketData = UserPacket::CreatePacketData(
+				SendBuilder,
+				UserPacket::PacketType_C2S_Move,
+				C2S_MoveData.Union()
+			);
+
+			SendBuilder.Finish(UserPacketData);
+		}
+
+
+		SendAll(ServerSocket, SendBuilder);
 	}
 
 	return 0;
-}
-
-void RenderPlayers()
-{
-	system("cls");
-	for (const auto& Player : AllPlayers)
-	{
-		if (Player.second.PlayerY >= 0 && Player.second.PlayerY < 20
-			&& Player.second.PlayerX >= 0 && Player.second.PlayerX < 20)
-		{
-			GotoXY(Player.second.PlayerX, Player.second.PlayerY);
-			if (!Player.first.empty())
-			{
-				printf("%c", Player.first[Player.first.length() - 1]);
-			}
-		}
-	}
 }

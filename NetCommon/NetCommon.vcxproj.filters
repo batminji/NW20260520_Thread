@@ -21,19 +21,10 @@
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Packet.h">
+    <ClInclude Include="SessionManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ChatPacket.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CS_PlayerDir.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="SC_PlayerPos.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="utility.h">
+    <ClInclude Include="NetUtil.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -44,23 +35,14 @@
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Packet.cpp">
+    <ClCompile Include="NetUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ChatPacket.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CS_PlayerDir.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="SC_PlayerPos.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="utility.cpp">
+    <ClCompile Include="SessionManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
+    <None Include="UserPacket.fbs" />
   </ItemGroup>
 </Project>

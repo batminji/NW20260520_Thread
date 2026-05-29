@@ -21,7 +21,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{0050638c-789e-44ca-992e-3ab689e779d3}</ProjectGuid>
+    <ProjectGuid>{a3b52135-6f72-48ae-a92b-73de3b82b0ce}</ProjectGuid>
     <RootNamespace>Server</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -71,10 +71,6 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)NetCommon;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(SolutionDir)NetCommon;$(IncludePath)</IncludePath>
     <LibraryPath>$(OutDir);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -133,17 +129,6 @@
   <ItemGroup>
     <ClCompile Include="server.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\tencent.rapidjson.1.1.1\build\tencent.rapidjson.targets" Condition="Exists('..\packages\tencent.rapidjson.1.1.1\build\tencent.rapidjson.targets')" />
-  </ImportGroup>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\packages\tencent.rapidjson.1.1.1\build\tencent.rapidjson.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\tencent.rapidjson.1.1.1\build\tencent.rapidjson.targets'))" />
-  </Target>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>
